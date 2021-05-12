@@ -1,5 +1,5 @@
 const app = require('../app')
-const db = require('../model/contacts.js')
+const db = require('../model/db.js')
 
 const PORT = process.env.PORT || 3000
 
