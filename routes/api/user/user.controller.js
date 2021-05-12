@@ -1,7 +1,7 @@
 const { validationResult } = require('express-validator')
 const { createUser, findUser, updateValue } = require('./user.model')
 const jwt = require('jsonwebtoken')
-var bcrypt = require('bcryptjs')
+const bcrypt = require('bcryptjs')
 
 const addUser = async (req, res, next) => {
   const errors = validationResult(req)
