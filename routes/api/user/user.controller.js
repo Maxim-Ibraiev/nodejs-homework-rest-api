@@ -110,7 +110,6 @@ const current = async (req, res, next) => {
 
 const updateAvatar = async (req, res, next) => {
   const { id } = req.user
-  const { description } = req.body
   const { path: temporaryName, originalname } = req.file
   const fileName = path.join(uploadDir, originalname)
   try {

@@ -1,4 +1,3 @@
-const gravatar = require('gravatar')
 const User = require('../../../db/schemas/usersSchemas')
 
 const createUser = async (body) => await User.create(body)
