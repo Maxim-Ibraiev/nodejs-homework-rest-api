@@ -1,5 +1,6 @@
 const { Schema, model } = require('mongoose')
 const bcrypt = require('bcryptjs')
+const gravatar = require('gravatar')
 require('dotenv').config()
 const SALT = Number(process.env.URL_DB)
 
@@ -22,6 +23,12 @@ const UserSchema = new Schema({
     type: String,
     default: null,
   },
+  avatarURL: {
+    type: String,
+    default: function () {
+      return gravatar.url(this.email, { s: '250' }, true)
+    },
+  },
 })
 
 UserSchema.pre('save', async function (next) {
@@ -34,6 +41,12 @@ UserSchema.pre('save', async function (next) {
 
 UserSchema.methods.validPassword = async function (password) {
   return await bcrypt.compare(password, this.password)
+}
+
+UserSchema.methods.getAvatarFileName = async function () {
+  const arrOfURL = this.avatarURL?.split('/')
+
+  return arrOfURL[arrOfURL.length - 1]
 }
 
 module.exports = model('users', UserSchema)

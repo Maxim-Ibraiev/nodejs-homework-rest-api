@@ -1,7 +1,17 @@
+const path = require('path')
+const fs = require('fs').promises
 const { validationResult } = require('express-validator')
-const { createUser, findUser, updateValue } = require('./user.model')
 const jwt = require('jsonwebtoken')
 const bcrypt = require('bcryptjs')
+const gravatar = require('gravatar')
+const Jimp = require('jimp')
+const {
+  uploadDir,
+  storeImage,
+  getAvatarURL,
+} = require('../../../config/globalConst')
+
+const User = require('./user.model')
 
 const addUser = async (req, res, next) => {
   const errors = validationResult(req)
@@ -13,7 +23,7 @@ const addUser = async (req, res, next) => {
     })
   }
 
-  const userAlreadyExist = await findUser({ email: req.body.email })
+  const userAlreadyExist = await User.findUser({ email: req.body.email })
 
   if (userAlreadyExist) {
     return res.status(409).json({
@@ -24,7 +34,10 @@ const addUser = async (req, res, next) => {
   }
 
   try {
-    const createdUser = await createUser(req.body)
+    req.body.avatarURL = gravatar.url(req.body.email, {
+      s: '200',
+    })
+    const createdUser = await User.createUser(req.body)
 
     res.status(201).json({
       Status: '201 Created',
@@ -46,7 +59,7 @@ const login = async (req, res, next) => {
     })
   }
 
-  const user = await findUser({ email: req.body.email })
+  const user = await User.findUser({ email: req.body.email })
   const isSamePassword =
     user && bcrypt.compareSync(req.body.password, user.password)
   if (isSamePassword) {
@@ -58,7 +71,7 @@ const login = async (req, res, next) => {
     const secretPhrase = process.env.SECRET_PHRASE
     const token = jwt.sign(userResult, secretPhrase)
 
-    await updateValue(user, { token })
+    await User.updateValueByEmail(user, { token })
 
     return res.status(200).json({
       Status: '200 OK',
@@ -79,7 +92,7 @@ const login = async (req, res, next) => {
 }
 
 const logout = async (req, res, next) => {
-  updateValue(req.user, { token: null })
+  User.updateValueByEmail(req.user, { token: null })
 
   res.status(204).json({})
 }
@@ -95,4 +108,45 @@ const current = async (req, res, next) => {
   })
 }
 
-module.exports = { login, addUser, logout, current }
+const updateAvatar = async (req, res, next) => {
+  const { id } = req.user
+  const { description } = req.body
+  const { path: temporaryName, originalname } = req.file
+  const fileName = path.join(uploadDir, originalname)
+  try {
+    await fs.rename(temporaryName, fileName)
+  } catch (err) {
+    await fs.unlink(temporaryName)
+    return next(err)
+  }
+
+  const newAvatarName = `${id}__${originalname}`
+  const avatarURL = getAvatarURL(newAvatarName)
+  const newFilePath = path.join(storeImage, newAvatarName)
+
+  Jimp.read(fileName)
+    .then((avatar) => {
+      return avatar
+        .contain(250, 250, Jimp.HORIZONTAL_ALIGN_LEFT | Jimp.VERTICAL_ALIGN_TOP)
+        .quality(60)
+        .write(newFilePath)
+    })
+    .then(() => User.updateAvatar(id, avatarURL))
+    .then(async () =>
+      fs.unlink(path.join(storeImage, await req.user.getAvatarFileName()))
+    )
+    .catch((err) => {
+      console.error(err)
+      next(err)
+    })
+
+  res.json({
+    Status: '200 OK',
+    'Content-Type': 'application/json',
+    ResponseBody: {
+      avatarURL: avatarURL,
+    },
+  })
+}
+
+module.exports = { login, addUser, logout, current, updateAvatar }
