@@ -8,6 +8,8 @@ const {
   logout,
   current,
   updateAvatar,
+  verify,
+  verifyAgain,
 } = require('./user.controller.js')
 const guard = require('../middleware/guard')
 const upload = require('../middleware/multer')
@@ -35,5 +37,14 @@ router.patch(
   upload.single('avatar'),
   asyncHandler(updateAvatar)
 )
+
+router.get('/verify/:verificationToken', asyncHandler(verify))
+router.post(
+  '/verify/',
+  body('email').isEmail().isString(),
+  asyncHandler(verifyAgain)
+)
+
+// router.post('/verify/', asyncHandler)
 
 module.exports = router

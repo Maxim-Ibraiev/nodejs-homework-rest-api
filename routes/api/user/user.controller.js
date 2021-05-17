@@ -5,6 +5,9 @@ const jwt = require('jsonwebtoken')
 const bcrypt = require('bcryptjs')
 const gravatar = require('gravatar')
 const Jimp = require('jimp')
+const { nanoid } = require('nanoid')
+const EmailService = require('../../../services/email')
+
 const {
   uploadDir,
   storeImage,
@@ -34,10 +37,17 @@ const addUser = async (req, res, next) => {
   }
 
   try {
-    req.body.avatarURL = gravatar.url(req.body.email, {
-      s: '200',
-    })
-    const createdUser = await User.createUser(req.body)
+    const newUser = {
+      ...req.body,
+      verifyToken: nanoid(),
+      avatarURL: gravatar.url(req.body.email, {
+        s: '200',
+      }),
+    }
+    const createdUser = await User.createUser(newUser)
+    const email = new EmailService()
+
+    email.sendVerifyEmail(newUser.verifyToken, newUser)
 
     res.status(201).json({
       Status: '201 Created',
@@ -62,7 +72,7 @@ const login = async (req, res, next) => {
   const user = await User.findUser({ email: req.body.email })
   const isSamePassword =
     user && bcrypt.compareSync(req.body.password, user.password)
-  if (isSamePassword) {
+  if (isSamePassword && user.verify) {
     const userResult = {
       email: user.email,
       subscription: user.subscription,
@@ -71,7 +81,7 @@ const login = async (req, res, next) => {
     const secretPhrase = process.env.SECRET_PHRASE
     const token = jwt.sign(userResult, secretPhrase)
 
-    await User.updateValueByEmail(user, { token })
+    await User.updateValueByEmail(user.email, { token })
 
     return res.status(200).json({
       Status: '200 OK',
@@ -92,7 +102,7 @@ const login = async (req, res, next) => {
 }
 
 const logout = async (req, res, next) => {
-  User.updateValueByEmail(req.user, { token: null })
+  User.updateValueByEmail(req.user.email, { token: null })
 
   res.status(204).json({})
 }
@@ -148,4 +158,67 @@ const updateAvatar = async (req, res, next) => {
   })
 }
 
-module.exports = { login, addUser, logout, current, updateAvatar }
+const verify = async (req, res, next) => {
+  const user = await User.findUserByVerifyToken(req.params.verificationToken)
+  if (user) {
+    User.updateValueByEmail(user.email, { verify: true, verifyToken: null })
+
+    return res.status(200).json({
+      Status: '200 OK',
+      ResponseBody: {
+        message: 'Verification successful',
+      },
+    })
+  }
+  res.status(404).json({
+    Status: '404 Not Found',
+    ResponseBody: {
+      message: 'User not found',
+    },
+  })
+}
+
+const verifyAgain = async (req, res, next) => {
+  const user = await User.findUser({ email: req.body.email })
+
+  if (!user) {
+    return res.status(400).json({
+      Status: '400 Bad Request',
+      'Content-Type': 'application/json',
+      ResponseBody: {
+        message: 'Bad Request',
+      },
+    })
+  }
+
+  if (user.verify || !user.verifyToken) {
+    return res.status(400).json({
+      Status: '400 Bad Request',
+      'Content-Type': 'application/json',
+      ResponseBody: {
+        message: 'Verification has already been passed',
+      },
+    })
+  }
+  const email = new EmailService()
+
+  email.sendVerifyEmail(user.verifyToken, user)
+
+  res.status(200).json({
+    Status: '200 Ok',
+    'Content-Type': 'application/json',
+    ResponseBody: {
+      message: 'Verification email sent',
+    },
+  })
+}
+
+module.exports = {
+  login,
+  addUser,
+  logout,
+  current,
+  updateAvatar,
+  verify,
+  verifyAgain,
+}

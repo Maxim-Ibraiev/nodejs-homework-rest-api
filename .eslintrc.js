@@ -12,4 +12,5 @@ module.exports = {
     'comma-dangle': 'off',
     'space-before-function-paren': 'off',
   },
+  plugins: ['@babel/plugin-proposal-private-methods', { loose: true }],
 }
